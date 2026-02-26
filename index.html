@@ -1,140 +1,180 @@
-using UnityEngine;
-using UnityEngine.AI;
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<title>Modo Carreira - Futebol</title>
+<style>
+body {
+    font-family: Arial;
+    background: #0f172a;
+    color: white;
+    text-align: center;
+}
+button {
+    padding: 10px 20px;
+    margin: 5px;
+    border: none;
+    background: #22c55e;
+    color: white;
+    cursor: pointer;
+    font-weight: bold;
+}
+button:hover {
+    background: #16a34a;
+}
+.card {
+    background: #1e293b;
+    padding: 10px;
+    margin: 10px;
+    border-radius: 8px;
+}
+</style>
+</head>
+<body>
 
-public class FootballGameComplete : MonoBehaviour
-{
-    [Header("REFERENCES")]
-    public Rigidbody player;
-    public Rigidbody ball;
-    public NavMeshAgent aiPlayer;
+<h1>⚽ Modo Carreira</h1>
+<h2 id="season">Temporada 1</h2>
+<h3 id="budget">Orçamento: €5000000</h3>
 
-    [Header("GOALS")]
-    public Transform goalA;
-    public Transform goalB;
+<button onclick="simulateSeason()">Simular Temporada</button>
+<button onclick="nextSeason()">Próxima Temporada</button>
 
-    [Header("PLAYER SETTINGS")]
-    public float moveSpeed = 8f;
-    public float rotationSpeed = 720f;
-    public float shotPower = 20f;
-    public float passPower = 10f;
-    public float kickRange = 2f;
-    public float stamina = 100f;
+<h2>Elenco</h2>
+<div id="squad"></div>
 
-    [Header("BALL SETTINGS")]
-    public float ballDrag = 0.2f;
-    public float ballAngularDrag = 0.05f;
+<h2>Tabela</h2>
+<div id="table"></div>
 
-    private int scoreA = 0;
-    private int scoreB = 0;
+<script>
+let season = 1;
+let budget = 5000000;
 
-    void Start()
-    {
-        ball.mass = 0.43f; // peso real bola futebol
-        ball.drag = ballDrag;
-        ball.angularDrag = ballAngularDrag;
+class Player {
+    constructor(name, age, overall) {
+        this.name = name;
+        this.age = age;
+        this.overall = overall;
+        this.potential = overall + Math.floor(Math.random() * 10);
+        this.value = overall * 100000;
     }
 
-    void Update()
-    {
-        PlayerMovement();
-        PlayerActions();
-        AIBehaviour();
-        CheckGoal();
-    }
-
-    void PlayerMovement()
-    {
-        float h = Input.GetAxis("Horizontal");
-        float v = Input.GetAxis("Vertical");
-
-        Vector3 direction = new Vector3(h, 0, v).normalized;
-
-        if (direction.magnitude > 0.1f)
-        {
-            stamina -= Time.deltaTime * 5f;
-            stamina = Mathf.Clamp(stamina, 0, 100);
-
-            Vector3 move = direction * moveSpeed * Time.deltaTime;
-            player.MovePosition(player.position + move);
-
-            Quaternion targetRotation = Quaternion.LookRotation(direction);
-            player.MoveRotation(Quaternion.RotateTowards(player.rotation, targetRotation, rotationSpeed * Time.deltaTime));
+    develop() {
+        if (this.overall < this.potential) {
+            this.overall += Math.floor(Math.random() * 2);
+            this.value = this.overall * 100000;
         }
-        else
-        {
-            stamina += Time.deltaTime * 10f;
-            stamina = Mathf.Clamp(stamina, 0, 100);
-        }
-    }
-
-    void PlayerActions()
-    {
-        float distanceToBall = Vector3.Distance(player.position, ball.position);
-
-        if (distanceToBall <= kickRange)
-        {
-            if (Input.GetKeyDown(KeyCode.Space))
-            {
-                Shoot();
-            }
-
-            if (Input.GetKeyDown(KeyCode.LeftShift))
-            {
-                Pass();
-            }
-        }
-    }
-
-    void Shoot()
-    {
-        Vector3 direction = player.transform.forward;
-        ball.AddForce(direction * shotPower, ForceMode.Impulse);
-        ball.AddTorque(Random.insideUnitSphere * 5f);
-    }
-
-    void Pass()
-    {
-        Vector3 direction = player.transform.forward;
-        ball.AddForce(direction * passPower, ForceMode.Impulse);
-    }
-
-    void AIBehaviour()
-    {
-        if (aiPlayer != null)
-        {
-            aiPlayer.SetDestination(ball.position);
-
-            float distance = Vector3.Distance(aiPlayer.transform.position, ball.position);
-
-            if (distance < 2f)
-            {
-                Vector3 shootDir = (goalA.position - aiPlayer.transform.position).normalized;
-                ball.AddForce(shootDir * shotPower, ForceMode.Impulse);
-            }
-        }
-    }
-
-    void CheckGoal()
-    {
-        if (Vector3.Distance(ball.position, goalA.position) < 2f)
-        {
-            scoreB++;
-            ResetBall();
-        }
-
-        if (Vector3.Distance(ball.position, goalB.position) < 2f)
-        {
-            scoreA++;
-            ResetBall();
-        }
-    }
-
-    void ResetBall()
-    {
-        ball.velocity = Vector3.zero;
-        ball.angularVelocity = Vector3.zero;
-        ball.position = Vector3.zero;
-
-        Debug.Log("Placar: Time A " + scoreA + " x " + scoreB + " Time B");
+        this.age++;
     }
 }
+
+class Team {
+    constructor(name) {
+        this.name = name;
+        this.points = 0;
+        this.goalsFor = 0;
+        this.goalsAgainst = 0;
+        this.squad = [];
+    }
+}
+
+let league = [];
+let playerTeam;
+
+function generateLeague() {
+    for (let i = 0; i < 6; i++) {
+        let team = new Team("Clube " + (i+1));
+        for (let j = 0; j < 15; j++) {
+            team.squad.push(new Player("Jogador_"+j, rand(18,32), rand(60,85)));
+        }
+        league.push(team);
+    }
+    playerTeam = league[0];
+}
+
+function simulateMatch(home, away) {
+    let homeGoals = rand(0,4);
+    let awayGoals = rand(0,4);
+
+    home.goalsFor += homeGoals;
+    home.goalsAgainst += awayGoals;
+
+    away.goalsFor += awayGoals;
+    away.goalsAgainst += homeGoals;
+
+    if (homeGoals > awayGoals) home.points += 3;
+    else if (awayGoals > homeGoals) away.points += 3;
+    else {
+        home.points += 1;
+        away.points += 1;
+    }
+}
+
+function simulateSeason() {
+    for (let i = 0; i < league.length; i++) {
+        for (let j = i+1; j < league.length; j++) {
+            simulateMatch(league[i], league[j]);
+        }
+    }
+
+    league.sort((a,b) => b.points - a.points);
+    updateTable();
+}
+
+function nextSeason() {
+    league.forEach(team => {
+        team.squad.forEach(player => player.develop());
+        team.points = 0;
+        team.goalsFor = 0;
+        team.goalsAgainst = 0;
+    });
+
+    season++;
+    budget += 2000000;
+
+    document.getElementById("season").innerText = "Temporada " + season;
+    document.getElementById("budget").innerText = "Orçamento: €" + budget;
+
+    updateSquad();
+    updateTable();
+}
+
+function updateSquad() {
+    let squadDiv = document.getElementById("squad");
+    squadDiv.innerHTML = "";
+
+    playerTeam.squad.forEach(player => {
+        squadDiv.innerHTML += `
+            <div class="card">
+                <b>${player.name}</b><br>
+                Idade: ${player.age} <br>
+                Overall: ${player.overall} <br>
+                Valor: €${player.value}
+            </div>
+        `;
+    });
+}
+
+function updateTable() {
+    let tableDiv = document.getElementById("table");
+    tableDiv.innerHTML = "";
+
+    league.forEach(team => {
+        tableDiv.innerHTML += `
+            <div class="card">
+                <b>${team.name}</b> - ${team.points} pts
+            </div>
+        `;
+    });
+}
+
+function rand(min,max){
+    return Math.floor(Math.random()*(max-min+1))+min;
+}
+
+generateLeague();
+updateSquad();
+updateTable();
+</script>
+
+</body>
+</html>
