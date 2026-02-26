@@ -1,111 +1,140 @@
-import pygame
-import sys
-import math
+using UnityEngine;
+using UnityEngine.AI;
 
-pygame.init()
+public class FootballGameComplete : MonoBehaviour
+{
+    [Header("REFERENCES")]
+    public Rigidbody player;
+    public Rigidbody ball;
+    public NavMeshAgent aiPlayer;
 
-# Configurações
-WIDTH, HEIGHT = 1000, 600
-screen = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("Mini Futebol")
+    [Header("GOALS")]
+    public Transform goalA;
+    public Transform goalB;
 
-clock = pygame.time.Clock()
+    [Header("PLAYER SETTINGS")]
+    public float moveSpeed = 8f;
+    public float rotationSpeed = 720f;
+    public float shotPower = 20f;
+    public float passPower = 10f;
+    public float kickRange = 2f;
+    public float stamina = 100f;
 
-# Cores
-GREEN = (34, 139, 34)
-WHITE = (255, 255, 255)
-RED = (200, 0, 0)
-BLUE = (0, 0, 200)
-BLACK = (0, 0, 0)
+    [Header("BALL SETTINGS")]
+    public float ballDrag = 0.2f;
+    public float ballAngularDrag = 0.05f;
 
-# Jogador
-player = pygame.Rect(200, 300, 40, 40)
-player_speed = 5
+    private int scoreA = 0;
+    private int scoreB = 0;
 
-# Bola
-ball_pos = [300, 300]
-ball_vel = [0, 0]
-ball_radius = 15
-ball_friction = 0.98
+    void Start()
+    {
+        ball.mass = 0.43f; // peso real bola futebol
+        ball.drag = ballDrag;
+        ball.angularDrag = ballAngularDrag;
+    }
 
-# Goleiro IA
-goalkeeper = pygame.Rect(900, 250, 30, 100)
-goalkeeper_speed = 4
+    void Update()
+    {
+        PlayerMovement();
+        PlayerActions();
+        AIBehaviour();
+        CheckGoal();
+    }
 
-# Gol
-goal = pygame.Rect(950, 200, 20, 200)
+    void PlayerMovement()
+    {
+        float h = Input.GetAxis("Horizontal");
+        float v = Input.GetAxis("Vertical");
 
-score = 0
-font = pygame.font.SysFont(None, 48)
+        Vector3 direction = new Vector3(h, 0, v).normalized;
 
-def draw_field():
-    screen.fill(GREEN)
-    pygame.draw.rect(screen, WHITE, (0, 0, WIDTH, HEIGHT), 5)
-    pygame.draw.line(screen, WHITE, (WIDTH//2, 0), (WIDTH//2, HEIGHT), 5)
-    pygame.draw.rect(screen, WHITE, goal)
+        if (direction.magnitude > 0.1f)
+        {
+            stamina -= Time.deltaTime * 5f;
+            stamina = Mathf.Clamp(stamina, 0, 100);
 
-def move_goalkeeper():
-    if goalkeeper.centery < ball_pos[1]:
-        goalkeeper.y += goalkeeper_speed
-    elif goalkeeper.centery > ball_pos[1]:
-        goalkeeper.y -= goalkeeper_speed
+            Vector3 move = direction * moveSpeed * Time.deltaTime;
+            player.MovePosition(player.position + move);
 
-def move_ball():
-    ball_pos[0] += ball_vel[0]
-    ball_pos[1] += ball_vel[1]
-    ball_vel[0] *= ball_friction
-    ball_vel[1] *= ball_friction
+            Quaternion targetRotation = Quaternion.LookRotation(direction);
+            player.MoveRotation(Quaternion.RotateTowards(player.rotation, targetRotation, rotationSpeed * Time.deltaTime));
+        }
+        else
+        {
+            stamina += Time.deltaTime * 10f;
+            stamina = Mathf.Clamp(stamina, 0, 100);
+        }
+    }
 
-while True:
-    clock.tick(60)
+    void PlayerActions()
+    {
+        float distanceToBall = Vector3.Distance(player.position, ball.position);
 
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            pygame.quit()
-            sys.exit()
+        if (distanceToBall <= kickRange)
+        {
+            if (Input.GetKeyDown(KeyCode.Space))
+            {
+                Shoot();
+            }
 
-        # Chute
-        if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_SPACE:
-                dx = ball_pos[0] - player.centerx
-                dy = ball_pos[1] - player.centery
-                dist = math.hypot(dx, dy)
-                if dist < 60:
-                    ball_vel[0] = dx * 0.2
-                    ball_vel[1] = dy * 0.2
+            if (Input.GetKeyDown(KeyCode.LeftShift))
+            {
+                Pass();
+            }
+        }
+    }
 
-    keys = pygame.key.get_pressed()
+    void Shoot()
+    {
+        Vector3 direction = player.transform.forward;
+        ball.AddForce(direction * shotPower, ForceMode.Impulse);
+        ball.AddTorque(Random.insideUnitSphere * 5f);
+    }
 
-    # Movimento jogador
-    if keys[pygame.K_w]:
-        player.y -= player_speed
-    if keys[pygame.K_s]:
-        player.y += player_speed
-    if keys[pygame.K_a]:
-        player.x -= player_speed
-    if keys[pygame.K_d]:
-        player.x += player_speed
+    void Pass()
+    {
+        Vector3 direction = player.transform.forward;
+        ball.AddForce(direction * passPower, ForceMode.Impulse);
+    }
 
-    move_ball()
-    move_goalkeeper()
+    void AIBehaviour()
+    {
+        if (aiPlayer != null)
+        {
+            aiPlayer.SetDestination(ball.position);
 
-    # Colisão bola com goleiro
-    if goalkeeper.collidepoint(ball_pos[0], ball_pos[1]):
-        ball_vel[0] *= -1
+            float distance = Vector3.Distance(aiPlayer.transform.position, ball.position);
 
-    # Gol
-    if goal.collidepoint(ball_pos[0], ball_pos[1]):
-        score += 1
-        ball_pos = [300, 300]
-        ball_vel = [0, 0]
+            if (distance < 2f)
+            {
+                Vector3 shootDir = (goalA.position - aiPlayer.transform.position).normalized;
+                ball.AddForce(shootDir * shotPower, ForceMode.Impulse);
+            }
+        }
+    }
 
-    draw_field()
+    void CheckGoal()
+    {
+        if (Vector3.Distance(ball.position, goalA.position) < 2f)
+        {
+            scoreB++;
+            ResetBall();
+        }
 
-    pygame.draw.rect(screen, RED, player)
-    pygame.draw.rect(screen, BLUE, goalkeeper)
-    pygame.draw.circle(screen, WHITE, (int(ball_pos[0]), int(ball_pos[1])), ball_radius)
+        if (Vector3.Distance(ball.position, goalB.position) < 2f)
+        {
+            scoreA++;
+            ResetBall();
+        }
+    }
 
-    score_text = font.render(f"Gols: {score}", True, BLACK)
-    screen.blit(score_text, (20, 20))
+    void ResetBall()
+    {
+        ball.velocity = Vector3.zero;
+        ball.angularVelocity = Vector3.zero;
+        ball.position = Vector3.zero;
 
-    pygame.display.flip()
+        Debug.Log("Placar: Time A " + scoreA + " x " + scoreB + " Time B");
+    }
+}
